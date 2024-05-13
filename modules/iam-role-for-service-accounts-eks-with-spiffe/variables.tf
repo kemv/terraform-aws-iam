@@ -52,6 +52,12 @@ variable "oidc_providers" {
   default     = {}
 }
 
+variable "trust_domains" {
+  description = "Map of trust domains where each key should be named the same as the trust domain, and the map should contain the `trust_anchor_arn` and `namespace_service_accounts`"
+  type        = any
+  default     = {}
+}
+
 variable "tags" {
   description = "A map of tags to add the the IAM role"
   type        = map(any)

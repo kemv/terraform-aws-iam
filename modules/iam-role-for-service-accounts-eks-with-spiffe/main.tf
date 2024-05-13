@@ -62,6 +62,32 @@ data "aws_iam_policy_document" "this" {
 
     }
   }
+
+  dynamic "statement" {
+    for_each = var.trust_domains
+
+    content {
+      effect  = "Allow"
+      actions = ["sts:AssumeRole", "sts:TagSession", "sts:SetSourceIdentity"]
+
+      principals {
+        type        = "Service"
+        identifiers = ["rolesanywhere.amazonaws.com"]
+      }
+
+      condition {
+        test     = "ArnEquals"
+        variable = "aws:SourceArn"
+        values   = [statement.value.trust_anchor_arn]
+      }
+
+      condition {
+        test     = "StringLike"
+        variable = "aws:PrincipalTag/x509SAN/URI"
+        values   = [for namespace_service_account in statement.value.namespace_service_accounts : "spiffe://${statement.key}/ns/${namespace_service_account.namespace}/sa/${namespace_service_account.service_account}"]
+      }
+    }
+  }
 }
 
 resource "aws_iam_role" "this" {
