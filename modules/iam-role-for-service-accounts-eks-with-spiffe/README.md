@@ -1,6 +1,6 @@
 # IAM Role for Service Accounts in EKS
 
-Creates an IAM role which can be assumed by AWS EKS `ServiceAccount`s with optional policies for commonly used controllers/custom resources within EKS. The optional policies supported include:
+Creates an IAM role which can be assumed a pod configured to use SPIFFE with AWS Roles Anywhere, and by AWS EKS `ServiceAccount`s with optional policies for commonly used controllers/custom resources within EKS. The optional policies supported include:
 
 - [Cert-Manager](https://cert-manager.io/docs/configuration/acme/dns01/route53/#set-up-an-iam-role)
 - [Cluster Autoscaler](https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/cloudprovider/aws/README.md)
@@ -19,13 +19,15 @@ Creates an IAM role which can be assumed by AWS EKS `ServiceAccount`s with optio
 - [Velero](https://github.com/vmware-tanzu/velero-plugin-for-aws#option-1-set-permissions-with-an-iam-user)
 - [VPC CNI](https://docs.aws.amazon.com/eks/latest/userguide/cni-iam-role.html)
 
-This module is intended to be used with AWS EKS. For details of how a `ServiceAccount` in EKS can assume an IAM role, see the [EKS documentation](https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html).
+If using the OIDC functionality, then this module is intended to be used with AWS EKS. For details of how a `ServiceAccount` in EKS can assume an IAM role, see the [EKS documentation](https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html).
 
-This module supports multiple `ServiceAccount`s across multiple clusters and/or namespaces. This allows for a single IAM role to be used when an application may span multiple clusters (e.g. for DR) or multiple namespaces (e.g. for canary deployments). For example, to create an IAM role named `my-app` that can be assumed from the `ServiceAccount` named `my-app-staging` in the namespace `default` and `canary` in a cluster in `us-east-1`; and also the `ServiceAccount` name `my-app-staging` in the namespace `default` in a cluster in `ap-southeast-1`, the configuration would be:
+If only using the SPIFFE functionality, then this module can be used with any Kubernetes cluster that is configured with SPIFFE and AWS Roles Anywhere.
+
+This module supports multiple `ServiceAccount`s across multiple SPIFFE trust domains and/or clusters and/or namespaces. This allows for a single IAM role to be used when an application may span multiple clusters (e.g. for DR) or multiple namespaces (e.g. for canary deployments). For example, to create an IAM role named `my-app` that can be assumed from the `ServiceAccount` named `my-app-staging` in the namespace `default` and `canary` in a cluster in `us-east-1`; and also the `ServiceAccount` name `my-app-staging` in the namespace `default` in a cluster in `ap-southeast-1`, the configuration would be:
 
 ```hcl
 module "iam_eks_role" {
-  source    = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
+  source    = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks-with-spiffe"
   role_name = "my-app"
 
   role_policy_arns = {
@@ -42,60 +44,26 @@ module "iam_eks_role" {
       namespace_service_accounts = ["default:my-app-staging"]
     }
   }
-}
-```
 
-This module has been designed in conjunction with the [`terraform-aws-eks`](https://github.com/terraform-aws-modules/terraform-aws-eks) module to easily integrate with it:
-
-```hcl
-module "vpc_cni_irsa_role" {
-  source    = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
-
-  role_name = "vpc-cni"
-
-  attach_vpc_cni_policy = true
-  vpc_cni_enable_ipv4   = true
-
-  oidc_providers = {
-    main = {
-      provider_arn               = module.eks.oidc_provider_arn
-      namespace_service_accounts = ["default:my-app", "canary:my-app"]
+  trust_domains = {
+    "spiffe.somecompany.org" = {
+      trust_anchor_arn           = "arn:aws:rolesanywhere:eu-central-1:012345678901:trust-anchor/00000000-0000-0000-0000-000000000000"
+      namespace_service_accounts = [
+        {
+          namespace = "default",
+          service_account = "my-app-staging"
+        }
+      ]
+    },
+    "canary.spiffe.somecompany.org" = {
+      trust_anchor_arn           = "arn:aws:rolesanywhere:eu-central-1:012345678901:trust-anchor/00000000-0000-0000-0000-000000000000"
+      namespace_service_accounts = [
+        {
+          namespace = "canary",
+          service_account = "my-app-staging"
+        }
+      ]
     }
-  }
-}
-
-module "karpenter_irsa_role" {
-  source    = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
-
-  role_name                          = "karpenter_controller"
-  attach_karpenter_controller_policy = true
-
-  karpenter_controller_cluster_name         = module.eks.cluster_name
-  karpenter_controller_node_iam_role_arns = [module.eks.eks_managed_node_groups["default"].iam_role_arn]
-
-  attach_vpc_cni_policy = true
-  vpc_cni_enable_ipv4   = true
-
-  oidc_providers = {
-    main = {
-      provider_arn               = module.eks.oidc_provider_arn
-      namespace_service_accounts = ["default:my-app", "canary:my-app"]
-    }
-  }
-}
-
-module "eks" {
-  source  = "terraform-aws-modules/eks/aws"
-  version = "~> 20.4"
-
-  cluster_name    = "my-cluster"
-  cluster_version = "1.29"
-
-  vpc_id     = module.vpc.vpc_id
-  subnet_ids = module.vpc.private_subnets
-
-  eks_managed_node_groups = {
-    default = {}
   }
 }
 ```
