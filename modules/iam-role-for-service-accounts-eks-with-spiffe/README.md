@@ -1,6 +1,6 @@
 # IAM Role for Service Accounts in EKS
 
-Creates an IAM role which can be assumed a pod configured to use SPIFFE with AWS Roles Anywhere, and by AWS EKS `ServiceAccount`s with optional policies for commonly used controllers/custom resources within EKS. The optional policies supported include:
+Creates an IAM role which can be assumed by a pod configured to use SPIFFE with AWS Roles Anywhere, and by AWS EKS `ServiceAccount`s with optional policies for commonly used controllers/custom resources within EKS. The optional policies supported include:
 
 - [Cert-Manager](https://cert-manager.io/docs/configuration/acme/dns01/route53/#set-up-an-iam-role)
 - [Cluster Autoscaler](https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/cloudprovider/aws/README.md)
